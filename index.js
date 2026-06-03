@@ -1,15 +1,10 @@
-import { Client } from 'pg';
+import app from './app.js';
+import con from './db.js';
 
 console.log('Bot Location Mapping System Started!!!');
 
-const con = new Client({
-  host: 'db',
-  port: Number(process.env.DB_PORT) || 5432,
-  database: 'mydb',
-  user: 'postgres',
-  password: 'admin',
-});
+const port = process.env.PORT || 3000;
 
-con.connect().then(() => {
-  console.log('Helllllo');
+const server = app.listen(port, () => {
+  console.log(`App running on https://localhost:${port}`);
 });
