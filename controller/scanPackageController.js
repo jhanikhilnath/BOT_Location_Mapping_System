@@ -1,6 +1,23 @@
 import con from '../db.js';
 import AppError from '../utils/appError.js';
 
+// HELPER FUNCTIONS
+
+export async function validateID(req, res, next) {
+  const id = req.params.id.trim();
+
+  if (!id || !id.startsWith('SP-') || id.length != 8) {
+    return next(
+      new AppError('ID parameter is in incorrect format or invalid', 400),
+    );
+  }
+
+  req.params.id = id;
+  next();
+}
+
+// MAIN ROUTE HANDLERS
+
 export async function createScanPackage(req, res, next) {
   req.body = req.body || {};
 
@@ -66,6 +83,94 @@ export async function createScanPackage(req, res, next) {
     });
   } catch (err) {
     //
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
+}
+
+export async function getAllScanPackage(req, res, next) {
+  try {
+    const query = `
+    SELECT * FROM scan_package;
+  `;
+
+    const packageResult = await con.query(query);
+
+    res.status(200).json({
+      status: 'ok',
+      data: packageResult.rows,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getScanPackage(req, res, next) {
+  //
+  const id = req.params.id;
+
+  if (!id || !id.startsWith('SP-') || id.length != 8) {
+    return next(
+      new AppError('ID parameter is in incorrect format or invalid', 400),
+    );
+  }
+
+  try {
+    const query = `
+      SELECT * FROM scan_package WHERE id=$1;
+    `;
+    const packageResult = await con.query(query, [id]);
+
+    if (packageResult.rowCount === 0) {
+      throw new AppError('ID Not found', 404);
+    }
+    res.status(200).json({
+      status: 'ok',
+      data: packageResult.rows[0],
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function deleteScanPackage(req, res, next) {
+  const id = req.params.id;
+
+  const client = await con.connect();
+
+  try {
+    await client.query('BEGIN');
+    const deleteQuery = `
+      DELETE FROM scan_package WHERE id=$1 RETURNING *;
+    `;
+    const packageResult = await client.query(deleteQuery, [id]);
+
+    if (packageResult.rowCount === 0) {
+      throw new AppError('ID Not found', 404);
+    }
+    const data = packageResult.rows[0];
+
+    const logQuery = `
+      INSERT INTO audit_logs (table_name, record_id, action, actor_identity, old_data)
+      VALUES  ($1, $2, $3, $4, $5);
+    `;
+    const logResult = await client.query(logQuery, [
+      'scan_package',
+      id,
+      'DELETE',
+      'admin',
+      data,
+    ]);
+
+    await client.query('COMMIT');
+
+    res.status(200).json({
+      status: 'ok',
+      data: data,
+    });
+  } catch (err) {
     await client.query('ROLLBACK');
     next(err);
   } finally {
