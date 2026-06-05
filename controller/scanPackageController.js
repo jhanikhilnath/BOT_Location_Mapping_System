@@ -207,6 +207,18 @@ export async function modifyScanPackage(req, res, next) {
 
     const getResponse = await client.query(getQuery, [req.params.id]);
 
+    let noDiff = true;
+
+    fieldsToUpdate.forEach(el => {
+      if (updates[el] != getResponse.rows[0][el]) {
+        noDiff = false;
+      }
+    });
+
+    if (noDiff) {
+      throw new AppError('Modified Data is same as Current Data', 400);
+    }
+
     if (getResponse.rowCount == 0) {
       throw new AppError('ID Not Found', 404);
     }
@@ -226,6 +238,10 @@ export async function modifyScanPackage(req, res, next) {
     updateParams.push(req.params.id);
 
     const updateResponse = await client.query(updateQuery, updateParams);
+
+    if (getResponse.rows[0] == updateResponse.rows[0]) {
+      throw new AppError('Data is same', 400);
+    }
 
     const logQuery = `
       INSERT INTO audit_logs (table_name, record_id, action, actor_identity, old_data, new_data)
