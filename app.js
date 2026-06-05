@@ -1,6 +1,10 @@
 import express from 'express';
+
 import scanPackageRouter from './router/scanPackageRouter.js';
+import locationRouter from './router/locationRouter.js';
 import globalErrorHandler from './controller/errorController.js';
+import logsRouter from './router/logsRouter.js';
+
 import AppError from './utils/appError.js';
 
 const app = express();
@@ -14,7 +18,11 @@ app.get('/api', (req, res) => {
   });
 });
 
+app.use('/api/logs', logsRouter);
+
 app.use('/api/scanPackage', scanPackageRouter);
+
+app.use('/api/location', locationRouter);
 
 app.all('{*splat}', (req, res, next) => {
   throw new AppError('Page Not Found', 404);
