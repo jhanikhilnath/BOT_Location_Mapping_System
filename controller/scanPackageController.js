@@ -16,9 +16,7 @@ export async function validateID(req, res, next) {
   next();
 }
 
-// MAIN ROUTE HANDLERS
-
-export async function createScanPackage(req, res, next) {
+export async function validateBody(req, res, next) {
   req.body = req.body || {};
 
   for (const arg in req.body) {
@@ -26,6 +24,13 @@ export async function createScanPackage(req, res, next) {
       req.body[arg] = req.body[arg].trim().toLowerCase();
     }
   }
+
+  next();
+}
+
+// MAIN ROUTE HANDLERS
+
+export async function createScanPackage(req, res, next) {
   //
   const {
     name,
@@ -169,6 +174,77 @@ export async function deleteScanPackage(req, res, next) {
     res.status(200).json({
       status: 'ok',
       data: data,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
+}
+
+export async function modifyScanPackage(req, res, next) {
+  const updates = req.body;
+
+  const allowedFields = ['name', 'type', 'target', 'environment', 'owner'];
+
+  const fieldsToUpdate = Object.keys(updates).filter(
+    key => allowedFields.includes(key) && updates[key] !== undefined,
+  );
+
+  console.log(updates);
+
+  if (fieldsToUpdate.length === 0) {
+    return next(new AppError('No modification values were provided', 400));
+  }
+
+  const client = await con.connect();
+  try {
+    await client.query('BEGIN');
+    const getQuery = `
+    SELECT * FROM scan_package WHERE id=$1
+  `;
+
+    const getResponse = await client.query(getQuery, [req.params.id]);
+
+    if (getResponse.rowCount == 0) {
+      throw new AppError('ID Not Found', 404);
+    }
+
+    const modifications = fieldsToUpdate.map(
+      (field, index) => `${field}=$${index + 1}`,
+    );
+
+    const updateQuery = `
+      UPDATE scan_package
+      SET ${modifications.join(', ')}
+      WHERE id=$${fieldsToUpdate.length + 1}
+      RETURNING *;
+  `;
+    const updateParams = fieldsToUpdate.map((field, index) => updates[field]);
+
+    updateParams.push(req.params.id);
+
+    const updateResponse = await client.query(updateQuery, updateParams);
+
+    const logQuery = `
+      INSERT INTO audit_logs (table_name, record_id, action, actor_identity, old_data, new_data)
+      VALUES  ($1, $2, $3, $4, $5, $6);
+    `;
+    const logResult = await client.query(logQuery, [
+      'scan_package',
+      req.params.id,
+      'UPDATE',
+      'admin',
+      getResponse.rows[0],
+      updateResponse.rows[0],
+    ]);
+
+    await client.query('COMMIT');
+
+    res.status(200).json({
+      status: 'ok',
+      data: updateResponse.rows[0],
     });
   } catch (err) {
     await client.query('ROLLBACK');
