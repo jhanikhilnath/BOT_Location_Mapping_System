@@ -53,6 +53,29 @@ export async function createNewMapping(req, res, next) {
   try {
     await client.query('BEGIN');
 
+    const validationQuery = `
+      SELECT sp.target, l.website
+      FROM scan_package sp, location l
+      WHERE sp.id = $1 AND l.id = $2;
+    `;
+    const validationResult = await client.query(validationQuery, [
+      scan_package_id,
+      location_id,
+    ]);
+
+    if (validationResult.rowCount === 0) {
+      throw new AppError('Invalid Scan Package ID or Location ID.', 404);
+    }
+
+    const { target, website } = validationResult.rows[0];
+
+    if (target !== website) {
+      throw new AppError(
+        `The Scan Package targets '${target}', but the Location belongs to '${website}'.`,
+        400,
+      );
+    }
+
     const query = `
       INSERT INTO mapping (scan_package_id, location_id, priority, action, frequency, notes, status)
       VALUES ($1, $2, $3, $4, $5, $6, $7)
