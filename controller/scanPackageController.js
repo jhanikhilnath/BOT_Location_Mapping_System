@@ -263,3 +263,25 @@ export async function modifyScanPackage(req, res, next) {
     client.release();
   }
 }
+
+export async function resolveScanPackage(req, res, next) {
+  const query = `
+    SELECT m.id AS mapping_id,
+        m.action,
+        m.priority,
+        m.frequency,
+        m.notes,
+        l.id AS location_id,
+        l.name AS location_name,
+        l.url,
+        l.selector
+    FROM mapping m JOIN location l ON m.location_id = l.id WHERE m.scan_package_id=$1 AND l.status::text='active' AND m.status::text='active' ORDER BY priority DESC;
+  `;
+
+  const resolveResponse = await con.query(query, [req.params.id]);
+
+  res.status(200).json({
+    status: 'ok',
+    data: resolveResponse.rows,
+  });
+}

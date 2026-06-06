@@ -5,6 +5,7 @@ import {
   getAllScanPackage,
   getScanPackage,
   modifyScanPackage,
+  resolveScanPackage,
   validateBody,
   validateID,
 } from '../controller/scanPackageController.js';
@@ -20,7 +21,7 @@ router
   .patch(validateBody, validateID, modifyScanPackage);
 
 // TODO
-// router.route('/showMappings/:id')
+router.route('/:id/resolve').get(validateID, resolveScanPackage);
 
 // TODO
 // router.route('/toggleActive/:id')

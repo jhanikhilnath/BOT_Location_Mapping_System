@@ -16,6 +16,8 @@ This system is designed for web-scrapping bots to dynamically fetch web-scrappin
    Deletes scan package with the specified id parameter
 1. **PATCH `/api/scanPackage/:id`**
    Modifies scan package with the specified id parameter. Accepted body arguments `name`, `type`, `target`, `environment`, `owner`.
+1. **GET `/api/scanPackage/:id/resolve**
+   Resolves scan package and returns order based on descending priority 1(highest priority)
 
 ### Location
 
@@ -30,7 +32,7 @@ This system is designed for web-scrapping bots to dynamically fetch web-scrappin
 1. **PATCH `/api/location/:id`**
    Modifies location with the specified id parameter. Accepted body arguments `name`, `website`, `location`, `url`, `selector`, `description`.
 
-### Location
+### Mapping
 
 1. **GET `/api/mapping`**
    Fetches all available mapping
