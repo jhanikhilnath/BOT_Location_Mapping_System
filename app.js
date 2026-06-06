@@ -1,13 +1,20 @@
 import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
 
 import scanPackageRouter from './router/scanPackageRouter.js';
 import locationRouter from './router/locationRouter.js';
+import mappingRouter from './router/mappingRouter.js';
 import globalErrorHandler from './controller/errorController.js';
 import logsRouter from './router/logsRouter.js';
 
 import AppError from './utils/appError.js';
 
 const app = express();
+
+app.use(helmet());
+
+app.use(cors());
 
 app.use(express.json());
 
@@ -17,6 +24,8 @@ app.get('/api', (req, res) => {
     message: 'All systms working!!',
   });
 });
+
+app.use('/api/mapping/', mappingRouter);
 
 app.use('/api/logs', logsRouter);
 
