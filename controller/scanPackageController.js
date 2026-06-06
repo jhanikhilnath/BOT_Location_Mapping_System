@@ -273,6 +273,7 @@ export async function resolveScanPackage(req, res, next) {
         m.notes,
         l.id AS location_id,
         l.name AS location_name,
+        l.location AS location_type,
         l.url,
         l.selector
     FROM mapping m JOIN location l ON m.location_id = l.id WHERE m.scan_package_id=$1 AND l.status::text='active' AND m.status::text='active' ORDER BY priority DESC;
@@ -283,5 +284,28 @@ export async function resolveScanPackage(req, res, next) {
   res.status(200).json({
     status: 'ok',
     data: resolveResponse.rows,
+  });
+}
+
+export async function getRelatedMappings(req, res, next) {
+  const checkQuery = `
+    SELECT * FROM scan_package WHERE id=$1;
+  `;
+
+  const checkResponse = await con.query(checkQuery, [req.params.id]);
+
+  if (checkResponse.rowCount == 0) {
+    return next(new AppError('Scan Package not found', 404));
+  }
+
+  const query = `
+    SELECT * FROM mapping WHERE scan_package_id=$1;
+  `;
+
+  const getResponse = await con.query(query, [req.params.id]);
+
+  res.status(200).json({
+    status: 'ok',
+    data: getResponse.rows,
   });
 }

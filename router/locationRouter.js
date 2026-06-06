@@ -5,6 +5,7 @@ import {
   deleteLocation,
   getAllLocation,
   getLocation,
+  getRelatedScanPackage,
   modifyLocation,
   validateBody,
   validateID,
@@ -19,6 +20,8 @@ router
   .get(validateID, getLocation)
   .delete(validateID, deleteLocation)
   .patch(validateID, validateBody, modifyLocation);
+
+router.route('/:id/scanPackages').get(validateID, getRelatedScanPackage);
 
 // TODO
 // router.route('/toggleActive/:id')

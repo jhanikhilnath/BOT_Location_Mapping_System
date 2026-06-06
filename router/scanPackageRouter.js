@@ -3,6 +3,7 @@ import {
   createScanPackage,
   deleteScanPackage,
   getAllScanPackage,
+  getRelatedMappings,
   getScanPackage,
   modifyScanPackage,
   resolveScanPackage,
@@ -20,9 +21,9 @@ router
   .delete(validateID, deleteScanPackage)
   .patch(validateBody, validateID, modifyScanPackage);
 
-// TODO
 router.route('/:id/resolve').get(validateID, resolveScanPackage);
 
+router.route('/:id/mappings').get(validateID, getRelatedMappings);
 // TODO
 // router.route('/toggleActive/:id')
 

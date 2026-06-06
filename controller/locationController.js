@@ -275,3 +275,26 @@ export async function modifyLocation(req, res, next) {
     client.release();
   }
 }
+
+export async function getRelatedScanPackage(req, res, next) {
+  const checkQuery = `
+    SELECT * FROM location WHERE id=$1;
+  `;
+
+  const checkResponse = await con.query(checkQuery, [req.params.id]);
+
+  if (checkResponse.rowCount == 0) {
+    return next(new AppError('Scan Package not found', 404));
+  }
+
+  const query = `
+    SELECT s.* FROM mapping m JOIN scan_package s ON s.id=m.scan_package_id WHERE m.location_id=$1;
+  `;
+
+  const getResponse = await con.query(query, [req.params.id]);
+
+  res.status(200).json({
+    status: 'ok',
+    data: getResponse.rows,
+  });
+}
