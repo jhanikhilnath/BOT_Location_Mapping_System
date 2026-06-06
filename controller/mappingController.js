@@ -1,6 +1,8 @@
 import con from '../db.js';
 import AppError from '../utils/appError.js';
 
+// HELPER
+
 export async function validateBody(req, res, next) {
   req.body = req.body || {};
 
@@ -15,6 +17,21 @@ export async function validateBody(req, res, next) {
 
   next();
 }
+
+export async function validateID(req, res, next) {
+  const id = req.params.id.trim();
+
+  if (!id || !id.startsWith('MAP-') || id.length < 9) {
+    return next(
+      new AppError('ID parameter is in incorrect format or invalid', 400),
+    );
+  }
+
+  req.params.id = id;
+  next();
+}
+
+// METHODS
 
 export async function createNewMapping(req, res, next) {
   const {
@@ -77,4 +94,36 @@ export async function createNewMapping(req, res, next) {
   } finally {
     client.release();
   }
+}
+
+export async function getAllMappings(req, res, next) {
+  const query = `
+    SELECT * FROM mapping;
+  `;
+
+  const getResponse = await con.query(query);
+
+  res.status(200).json({
+    status: 'ok',
+    data: getResponse.rows,
+  });
+}
+
+export async function getOneMapping(req, res, next) {
+  const id = req.params.id;
+
+  const query = `
+    SELECT * FROM mapping WHERE id=$1;
+  `;
+
+  const getResponse = await con.query(query, [id]);
+
+  if (getResponse.rowCount === 0) {
+    return next(new AppError('ID Not found.', 404));
+  }
+
+  res.status(200).json({
+    status: 'ok',
+    data: getResponse.rows[0],
+  });
 }
