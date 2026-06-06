@@ -30,6 +30,19 @@ This system is designed for web-scrapping bots to dynamically fetch web-scrappin
 1. **PATCH `/api/location/:id`**
    Modifies location with the specified id parameter. Accepted body arguments `name`, `website`, `location`, `url`, `selector`, `description`.
 
+### Location
+
+1. **GET `/api/mapping`**
+   Fetches all available mapping
+1. **POST `/api/mapping`**
+   Creates a new mapping. Accepted body arguments `scan_package_id`, `location_id`, `action`,`priority`, `frequency`, `notes`, `status`.
+1. **GET `/api/mapping/:id`**
+   Gets mapping with the specified id parameter
+1. **DELETE `/api/mapping/:id`**
+   Deletes mapping with the specified id parameter
+1. **PATCH `/api/mapping/:id`**
+   Modifies mapping with the specified id parameter. Accepted body arguments `scan_package_id`, `location_id`, `action`,`priority`, `frequency`, `notes`.
+
 ### Logs
 
 1. **GET `/api/logs`**

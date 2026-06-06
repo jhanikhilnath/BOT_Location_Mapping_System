@@ -198,7 +198,7 @@ export async function modifyLocation(req, res, next) {
     key => allowedFields.includes(key) && updates[key] !== undefined,
   );
 
-  console.log(updates);
+  // console.log(updates);
 
   if (fieldsToUpdate.length === 0) {
     return next(new AppError('No modification values were provided', 400));
@@ -208,7 +208,7 @@ export async function modifyLocation(req, res, next) {
   try {
     await client.query('BEGIN');
     const getQuery = `
-    SELECT * FROM location WHERE id=$1
+    SELECT * FROM location WHERE id=$1;
   `;
 
     const getResponse = await client.query(getQuery, [req.params.id]);
