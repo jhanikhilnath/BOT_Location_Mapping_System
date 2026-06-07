@@ -225,6 +225,9 @@ export async function modifyMapping(req, res, next) {
 
     const getResponse = await client.query(getQuery, [req.params.id]);
 
+    if (getResponse.rowCount == 0) {
+      throw new AppError('ID Not Found', 404);
+    }
     let noDiff = true;
 
     fieldsToUpdate.forEach(el => {
@@ -235,10 +238,6 @@ export async function modifyMapping(req, res, next) {
 
     if (noDiff) {
       throw new AppError('Modified Data is same as Current Data', 400);
-    }
-
-    if (getResponse.rowCount == 0) {
-      throw new AppError('ID Not Found', 404);
     }
 
     const modifications = fieldsToUpdate.map(
@@ -257,9 +256,9 @@ export async function modifyMapping(req, res, next) {
 
     const updateResponse = await client.query(updateQuery, updateParams);
 
-    if (getResponse.rows[0] == updateResponse.rows[0]) {
-      throw new AppError('Data is same', 400);
-    }
+    // if (getResponse.rows[0] == updateResponse.rows[0]) {
+    //   throw new AppError('Data is same', 400);
+    // }
 
     const logQuery = `
       INSERT INTO audit_logs (table_name, record_id, action, actor_identity, old_data, new_data)
@@ -269,6 +268,72 @@ export async function modifyMapping(req, res, next) {
       'mapping',
       req.params.id,
       'UPDATE',
+      'admin',
+      getResponse.rows[0],
+      updateResponse.rows[0],
+    ]);
+
+    await client.query('COMMIT');
+
+    res.status(200).json({
+      status: 'ok',
+      data: updateResponse.rows[0],
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
+}
+
+export async function changeStatus(req, res, next) {
+  const { status } = req.body;
+
+  // console.log(updates);
+
+  if (!status) {
+    return next(new AppError('No modification values were provided', 400));
+  }
+
+  const client = await con.connect();
+  try {
+    await client.query('BEGIN');
+    const getQuery = `
+    SELECT * FROM mapping WHERE id=$1;
+  `;
+
+    const getResponse = await client.query(getQuery, [req.params.id]);
+
+    if (getResponse.rowCount == 0) {
+      throw new AppError('ID Not Found', 404);
+    }
+
+    if (status === getResponse.rows[0].status) {
+      throw new AppError('Modified Data is same as Current Data', 400);
+    }
+
+    const updateQuery = `
+      UPDATE mapping
+      SET status=$1
+      WHERE id=$2
+      RETURNING *;
+  `;
+
+    const updateResponse = await client.query(updateQuery, [
+      status,
+      req.params.id,
+    ]);
+
+    const logQuery = `
+      INSERT INTO audit_logs (table_name, record_id, action, actor_identity, old_data, new_data)
+      VALUES  ($1, $2, $3, $4, $5, $6);
+    `;
+
+    const logResult = await client.query(logQuery, [
+      'mapping',
+      req.params.id,
+      'STATUS',
       'admin',
       getResponse.rows[0],
       updateResponse.rows[0],

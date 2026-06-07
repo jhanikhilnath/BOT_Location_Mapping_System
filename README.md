@@ -20,6 +20,8 @@ This system is designed for web-scrapping bots to dynamically fetch web-scrappin
    Resolves scan package and returns order based on descending priority 1(highest priority)
 1. **GET `/api/scanPackage/:id/mappings`** \
    Gets all mappings related to a scan_package
+1. **PATCH `/api/scanPackage/:id/status`** \
+   Change status for scan_package and if disabled, then disable all the mappings as well
 
 ### Location
 
@@ -35,6 +37,8 @@ This system is designed for web-scrapping bots to dynamically fetch web-scrappin
    Modifies location with the specified id parameter. Accepted body arguments `name`, `website`, `location`, `url`, `selector`, `description`.
 1. **GET `/api/location/:id/scanPackages`** \
    Gets all scan_package related to a location
+1. **PATCH `/api/location/:id/status`** \
+   Change status for location and if disabled, then disable all the mappings as well
 
 ### Mapping
 
@@ -48,6 +52,8 @@ This system is designed for web-scrapping bots to dynamically fetch web-scrappin
    Deletes mapping with the specified id parameter
 1. **PATCH `/api/mapping/:id`** \
    Modifies mapping with the specified id parameter. Accepted body arguments `scan_package_id`, `location_id`, `action`,`priority`, `frequency`, `notes`.
+1. **PATCH `/api/mapping/:id/status`** \
+   Change status for mapping
 
 ### Logs
 

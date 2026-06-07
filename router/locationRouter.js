@@ -1,6 +1,7 @@
 import express from 'express';
 
 import {
+  changeStatus,
   createLocation,
   deleteLocation,
   getAllLocation,
@@ -23,7 +24,6 @@ router
 
 router.route('/:id/scanPackages').get(validateID, getRelatedScanPackage);
 
-// TODO
-// router.route('/toggleActive/:id')
+router.route('/:id/status').patch(validateBody, validateID, changeStatus);
 
 export default router;

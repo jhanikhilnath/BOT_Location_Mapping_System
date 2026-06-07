@@ -1,5 +1,6 @@
 import express from 'express';
 import {
+  changeStatus,
   createNewMapping,
   deleteMapping,
   getAllMappings,
@@ -18,5 +19,7 @@ router
   .get(validateID, getOneMapping)
   .delete(validateID, deleteMapping)
   .patch(validateID, validateBody, modifyMapping);
+
+router.route('/:id/status').patch(validateID, validateBody, changeStatus);
 
 export default router;

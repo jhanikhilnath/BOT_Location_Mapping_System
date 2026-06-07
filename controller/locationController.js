@@ -213,6 +213,10 @@ export async function modifyLocation(req, res, next) {
 
     const getResponse = await client.query(getQuery, [req.params.id]);
 
+    if (getResponse.rowCount == 0) {
+      throw new AppError('ID Not Found', 404);
+    }
+
     let noDiff = true;
 
     fieldsToUpdate.forEach(el => {
@@ -223,10 +227,6 @@ export async function modifyLocation(req, res, next) {
 
     if (noDiff) {
       throw new AppError('Modified Data is same as Current Data', 400);
-    }
-
-    if (getResponse.rowCount == 0) {
-      throw new AppError('ID Not Found', 404);
     }
 
     const modifications = fieldsToUpdate.map(
@@ -245,9 +245,9 @@ export async function modifyLocation(req, res, next) {
 
     const updateResponse = await client.query(updateQuery, updateParams);
 
-    if (getResponse.rows[0] == updateResponse.rows[0]) {
-      throw new AppError('Data is same', 400);
-    }
+    // if (getResponse.rows[0] == updateResponse.rows[0]) {
+    //   throw new AppError('Data is same', 400);
+    // }
 
     const logQuery = `
       INSERT INTO audit_logs (table_name, record_id, action, actor_identity, old_data, new_data)
@@ -297,4 +297,86 @@ export async function getRelatedScanPackage(req, res, next) {
     status: 'ok',
     data: getResponse.rows,
   });
+}
+
+export async function changeStatus(req, res, next) {
+  const { status } = req.body;
+
+  // console.log(updates);
+
+  if (!status) {
+    return next(new AppError('No modification values were provided', 400));
+  }
+
+  const client = await con.connect();
+  try {
+    await client.query('BEGIN');
+    const getQuery = `
+    SELECT * FROM location WHERE id=$1;
+  `;
+
+    const getResponse = await client.query(getQuery, [req.params.id]);
+
+    if (getResponse.rowCount == 0) {
+      throw new AppError('ID Not Found', 404);
+    }
+
+    if (status === getResponse.rows[0].status) {
+      throw new AppError('Modified Data is same as Current Data', 400);
+    }
+
+    const updateLocQuery = `
+      UPDATE location
+      SET status=$1
+      WHERE id=$2
+      RETURNING *;
+  `;
+
+    const updateLocResponse = await client.query(updateLocQuery, [
+      status,
+      req.params.id,
+    ]);
+
+    let updateMapResponse = null;
+
+    if (status === 'inactive') {
+      const updateMapQuery = `
+      UPDATE mapping
+      SET status='inactive'
+      WHERE location_id=$1 AND status='active'
+      RETURNING *;
+    `;
+
+      updateMapResponse = await client.query(updateMapQuery, [req.params.id]);
+    }
+
+    const logQuery = `
+      INSERT INTO audit_logs (table_name, record_id, action, actor_identity, old_data, new_data)
+      VALUES  ($1, $2, $3, $4, $5, $6);
+    `;
+
+    const logResult = await client.query(logQuery, [
+      'location',
+      req.params.id,
+      'STATUS',
+      'admin',
+      getResponse.rows[0],
+      updateLocResponse.rows[0],
+    ]);
+
+    await client.query('COMMIT');
+
+    res.status(200).json({
+      status: 'ok',
+      data: {
+        location: updateLocResponse.rows[0],
+        mappings: updateMapResponse ? updateMapResponse.rows : null,
+      },
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
 }
