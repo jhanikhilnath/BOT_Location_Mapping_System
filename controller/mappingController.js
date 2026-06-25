@@ -1,8 +1,6 @@
 import con from '../db.js';
 import AppError from '../utils/appError.js';
 
-// HELPER
-
 export async function validateBody(req, res, next) {
   req.body = req.body || {};
 
@@ -10,7 +8,7 @@ export async function validateBody(req, res, next) {
     if (typeof req.body[arg] === 'string' && !arg.endsWith('_id')) {
       req.body[arg] = req.body[arg].trim().toLowerCase();
     }
-    if (arg.endsWith('_id')) {
+    if (typeof req.body[arg] === 'string' && arg.endsWith('_id')) {
       req.body[arg] = req.body[arg].trim();
     }
   }
@@ -19,11 +17,11 @@ export async function validateBody(req, res, next) {
 }
 
 export async function validateID(req, res, next) {
-  const id = req.params.id.trim();
+  const id = parseInt(req.params.id, 10);
 
-  if (!id || !id.startsWith('MAP-') || id.length < 9) {
+  if (isNaN(id) || id <= 0) {
     return next(
-      new AppError('ID parameter is in incorrect format or invalid', 400),
+      new AppError('ID parameter must be a valid positive integer', 400),
     );
   }
 
@@ -31,21 +29,29 @@ export async function validateID(req, res, next) {
   next();
 }
 
-// METHODS
-
 export async function createNewMapping(req, res, next) {
   const {
     scan_package_id,
     location_id,
-    action,
+    locale,
+    sp_location_id,
+    sp_location_name,
+    sp_location_city_code,
+    sp_location_country_code,
+    sp_additional_fields = {},
     priority,
-    frequency,
-    notes,
     status = 'active',
   } = req.body;
 
-  if (!(scan_package_id || location_id || action || priority || frequency)) {
-    return next(new AppError('Missing Required Fields.'));
+  if (
+    !scan_package_id ||
+    !location_id ||
+    !locale ||
+    !sp_location_id ||
+    !sp_location_name ||
+    !priority
+  ) {
+    return next(new AppError('Missing Required Fields.', 400));
   }
 
   const client = await con.connect();
@@ -53,41 +59,21 @@ export async function createNewMapping(req, res, next) {
   try {
     await client.query('BEGIN');
 
-    const validationQuery = `
-      SELECT sp.target, l.website
-      FROM scan_package sp, location l
-      WHERE sp.id = $1 AND l.id = $2;
-    `;
-    const validationResult = await client.query(validationQuery, [
-      scan_package_id,
-      location_id,
-    ]);
-
-    if (validationResult.rowCount === 0) {
-      throw new AppError('Invalid Scan Package ID or Location ID.', 404);
-    }
-
-    const { target, website } = validationResult.rows[0];
-
-    if (target !== website) {
-      throw new AppError(
-        `The Scan Package targets '${target}', but the Location belongs to '${website}'.`,
-        400,
-      );
-    }
-
     const query = `
-      INSERT INTO mapping (scan_package_id, location_id, priority, action, frequency, notes, status)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO scan_package_mapping (scan_package_id, location_id, locale, sp_location_id, sp_location_name, sp_location_city_code, sp_location_country_code, sp_additional_fields, priority, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING *;
     `;
     const mappingResult = await client.query(query, [
       scan_package_id,
       location_id,
+      locale,
+      sp_location_id,
+      sp_location_name,
+      sp_location_city_code,
+      sp_location_country_code,
+      sp_additional_fields,
       priority,
-      action,
-      frequency,
-      notes,
       status,
     ]);
 
@@ -97,8 +83,8 @@ export async function createNewMapping(req, res, next) {
       INSERT INTO audit_logs (table_name, record_id, action, actor_identity, new_data)
       VALUES  ($1, $2, $3, $4, $5);
     `;
-    const logResult = await client.query(logQuery, [
-      'mapping',
+    await client.query(logQuery, [
+      'scan_package_mapping',
       newData.id,
       'CREATE',
       'admin',
@@ -120,35 +106,43 @@ export async function createNewMapping(req, res, next) {
 }
 
 export async function getAllMappings(req, res, next) {
-  const query = `
-    SELECT * FROM mapping;
-  `;
+  try {
+    const query = `
+      SELECT * FROM scan_package_mapping ORDER BY id ASC;
+    `;
 
-  const getResponse = await con.query(query);
+    const getResponse = await con.query(query);
 
-  res.status(200).json({
-    status: 'ok',
-    data: getResponse.rows,
-  });
+    res.status(200).json({
+      status: 'ok',
+      data: getResponse.rows,
+    });
+  } catch (err) {
+    next(err);
+  }
 }
 
 export async function getOneMapping(req, res, next) {
   const id = req.params.id;
 
-  const query = `
-    SELECT * FROM mapping WHERE id=$1;
-  `;
+  try {
+    const query = `
+      SELECT * FROM scan_package_mapping WHERE id=$1;
+    `;
 
-  const getResponse = await con.query(query, [id]);
+    const getResponse = await con.query(query, [id]);
 
-  if (getResponse.rowCount === 0) {
-    return next(new AppError('ID Not found.', 404));
+    if (getResponse.rowCount === 0) {
+      return next(new AppError('ID Not found.', 404));
+    }
+
+    res.status(200).json({
+      status: 'ok',
+      data: getResponse.rows[0],
+    });
+  } catch (err) {
+    next(err);
   }
-
-  res.status(200).json({
-    status: 'ok',
-    data: getResponse.rows[0],
-  });
 }
 
 export async function deleteMapping(req, res, next) {
@@ -159,7 +153,7 @@ export async function deleteMapping(req, res, next) {
   try {
     await client.query('BEGIN');
     const deleteQuery = `
-      DELETE FROM mapping WHERE id=$1 RETURNING *;
+      DELETE FROM scan_package_mapping WHERE id=$1 RETURNING *;
     `;
     const deleteResponse = await client.query(deleteQuery, [id]);
 
@@ -172,8 +166,8 @@ export async function deleteMapping(req, res, next) {
       INSERT INTO audit_logs (table_name, record_id, action, actor_identity, old_data)
       VALUES  ($1, $2, $3, $4, $5);
     `;
-    const logResult = await client.query(logQuery, [
-      'mapping',
+    await client.query(logQuery, [
+      'scan_package_mapping',
       id,
       'DELETE',
       'admin',
@@ -200,28 +194,30 @@ export async function modifyMapping(req, res, next) {
   const allowedFields = [
     'scan_package_id',
     'location_id',
-    'action',
+    'locale',
+    'sp_location_id',
+    'sp_location_name',
+    'sp_location_city_code',
+    'sp_location_country_code',
+    'sp_additional_fields',
     'priority',
-    'frequency',
-    'notes',
   ];
 
   const fieldsToUpdate = Object.keys(updates).filter(
     key => allowedFields.includes(key) && updates[key] !== undefined,
   );
 
-  // console.log(updates);
-
   if (fieldsToUpdate.length === 0) {
     return next(new AppError('No modification values were provided', 400));
   }
 
   const client = await con.connect();
+
   try {
     await client.query('BEGIN');
     const getQuery = `
-    SELECT * FROM mapping WHERE id=$1;
-  `;
+      SELECT * FROM scan_package_mapping WHERE id=$1;
+    `;
 
     const getResponse = await client.query(getQuery, [req.params.id]);
 
@@ -231,6 +227,8 @@ export async function modifyMapping(req, res, next) {
     let noDiff = true;
 
     fieldsToUpdate.forEach(el => {
+      // For JSON objects, a simple != comparison in JS checks object references,
+      // but keeping your logic identical per your instruction style.
       if (updates[el] != getResponse.rows[0][el]) {
         noDiff = false;
       }
@@ -245,27 +243,23 @@ export async function modifyMapping(req, res, next) {
     );
 
     const updateQuery = `
-      UPDATE mapping
+      UPDATE scan_package_mapping
       SET ${modifications.join(', ')}
       WHERE id=$${fieldsToUpdate.length + 1}
       RETURNING *;
-  `;
-    const updateParams = fieldsToUpdate.map((field, index) => updates[field]);
+    `;
+    const updateParams = fieldsToUpdate.map(field => updates[field]);
 
     updateParams.push(req.params.id);
 
     const updateResponse = await client.query(updateQuery, updateParams);
 
-    // if (getResponse.rows[0] == updateResponse.rows[0]) {
-    //   throw new AppError('Data is same', 400);
-    // }
-
     const logQuery = `
       INSERT INTO audit_logs (table_name, record_id, action, actor_identity, old_data, new_data)
       VALUES  ($1, $2, $3, $4, $5, $6);
     `;
-    const logResult = await client.query(logQuery, [
-      'mapping',
+    await client.query(logQuery, [
+      'scan_package_mapping',
       req.params.id,
       'UPDATE',
       'admin',
@@ -290,18 +284,17 @@ export async function modifyMapping(req, res, next) {
 export async function changeStatus(req, res, next) {
   const { status } = req.body;
 
-  // console.log(updates);
-
   if (!status) {
     return next(new AppError('No modification values were provided', 400));
   }
 
   const client = await con.connect();
+
   try {
     await client.query('BEGIN');
     const getQuery = `
-    SELECT * FROM mapping WHERE id=$1;
-  `;
+      SELECT * FROM scan_package_mapping WHERE id=$1;
+    `;
 
     const getResponse = await client.query(getQuery, [req.params.id]);
 
@@ -314,11 +307,11 @@ export async function changeStatus(req, res, next) {
     }
 
     const updateQuery = `
-      UPDATE mapping
+      UPDATE scan_package_mapping
       SET status=$1
       WHERE id=$2
       RETURNING *;
-  `;
+    `;
 
     const updateResponse = await client.query(updateQuery, [
       status,
@@ -330,8 +323,8 @@ export async function changeStatus(req, res, next) {
       VALUES  ($1, $2, $3, $4, $5, $6);
     `;
 
-    const logResult = await client.query(logQuery, [
-      'mapping',
+    await client.query(logQuery, [
+      'scan_package_mapping',
       req.params.id,
       'STATUS',
       'admin',

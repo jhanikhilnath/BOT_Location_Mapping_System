@@ -1,15 +1,11 @@
 import con from '../db.js';
 import AppError from '../utils/appError.js';
 
-// HELPER FUNCTIONS
-
 export async function validateID(req, res, next) {
   const id = req.params.id.trim();
 
-  if (!id || !id.startsWith('SP-') || id.length < 8) {
-    return next(
-      new AppError('ID parameter is in incorrect format or invalid', 400),
-    );
+  if (!id || id.length < 3) {
+    return next(new AppError('ID parameter is invalid', 400));
   }
 
   req.params.id = id;
@@ -28,39 +24,26 @@ export async function validateBody(req, res, next) {
   next();
 }
 
-// MAIN ROUTE HANDLERS
-
 export async function createScanPackage(req, res, next) {
-  //
-  const {
-    name,
-    type,
-    target,
-    environment,
-    owner,
-    status = 'active',
-  } = req.body;
+  const { id, name, type, environment, owner, status = 'active' } = req.body;
 
-  if (!name || !type || !target || !environment || !owner) {
+  if (!id || !name || !type || !environment || !owner) {
     return next(new AppError('Missing Fields', 400));
   }
-
-  // Create Scan Package Entry
 
   const client = await con.connect();
 
   try {
-    //
     await client.query('BEGIN');
     const packageQuery = `
-      INSERT INTO scan_package (name, type, target, environment, owner, status)
+      INSERT INTO scan_package (id, name, type, environment, owner, status)
       VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *;
     `;
     const packageResult = await client.query(packageQuery, [
+      id,
       name,
       type,
-      target,
       environment,
       owner,
       status,
@@ -71,7 +54,7 @@ export async function createScanPackage(req, res, next) {
       INSERT INTO audit_logs (table_name, record_id, action, actor_identity, new_data)
       VALUES  ($1, $2, $3, $4, $5);
     `;
-    const logResult = await client.query(logQuery, [
+    await client.query(logQuery, [
       'scan_package',
       newData.id,
       'CREATE',
@@ -87,7 +70,6 @@ export async function createScanPackage(req, res, next) {
       data: newData,
     });
   } catch (err) {
-    //
     await client.query('ROLLBACK');
     next(err);
   } finally {
@@ -98,8 +80,8 @@ export async function createScanPackage(req, res, next) {
 export async function getAllScanPackage(req, res, next) {
   try {
     const query = `
-    SELECT * FROM scan_package;
-  `;
+      SELECT * FROM scan_package;
+    `;
 
     const packageResult = await con.query(query);
 
@@ -113,7 +95,6 @@ export async function getAllScanPackage(req, res, next) {
 }
 
 export async function getScanPackage(req, res, next) {
-  //
   const id = req.params.id;
 
   try {
@@ -125,6 +106,7 @@ export async function getScanPackage(req, res, next) {
     if (packageResult.rowCount === 0) {
       throw new AppError('ID Not found', 404);
     }
+
     res.status(200).json({
       status: 'ok',
       data: packageResult.rows[0],
@@ -136,7 +118,6 @@ export async function getScanPackage(req, res, next) {
 
 export async function deleteScanPackage(req, res, next) {
   const id = req.params.id;
-
   const client = await con.connect();
 
   try {
@@ -155,13 +136,7 @@ export async function deleteScanPackage(req, res, next) {
       INSERT INTO audit_logs (table_name, record_id, action, actor_identity, old_data)
       VALUES  ($1, $2, $3, $4, $5);
     `;
-    const logResult = await client.query(logQuery, [
-      'scan_package',
-      id,
-      'DELETE',
-      'admin',
-      data,
-    ]);
+    await client.query(logQuery, ['scan_package', id, 'DELETE', 'admin', data]);
 
     await client.query('COMMIT');
 
@@ -179,25 +154,23 @@ export async function deleteScanPackage(req, res, next) {
 
 export async function modifyScanPackage(req, res, next) {
   const updates = req.body;
-
-  const allowedFields = ['name', 'type', 'target', 'environment', 'owner'];
+  const allowedFields = ['name', 'type', 'environment', 'owner'];
 
   const fieldsToUpdate = Object.keys(updates).filter(
     key => allowedFields.includes(key) && updates[key] !== undefined,
   );
-
-  // console.log(updates);
 
   if (fieldsToUpdate.length === 0) {
     return next(new AppError('No modification values were provided', 400));
   }
 
   const client = await con.connect();
+
   try {
     await client.query('BEGIN');
     const getQuery = `
-    SELECT * FROM scan_package WHERE id=$1;
-  `;
+      SELECT * FROM scan_package WHERE id=$1;
+    `;
 
     const getResponse = await client.query(getQuery, [req.params.id]);
 
@@ -206,7 +179,6 @@ export async function modifyScanPackage(req, res, next) {
     }
 
     let noDiff = true;
-
     fieldsToUpdate.forEach(el => {
       if (updates[el] != getResponse.rows[0][el]) {
         noDiff = false;
@@ -226,22 +198,18 @@ export async function modifyScanPackage(req, res, next) {
       SET ${modifications.join(', ')}
       WHERE id=$${fieldsToUpdate.length + 1}
       RETURNING *;
-  `;
-    const updateParams = fieldsToUpdate.map((field, index) => updates[field]);
+    `;
 
+    const updateParams = fieldsToUpdate.map(field => updates[field]);
     updateParams.push(req.params.id);
 
     const updateResponse = await client.query(updateQuery, updateParams);
-
-    // if (getResponse.rows[0] == updateResponse.rows[0]) {
-    //   throw new AppError('Data is same', 400);
-    // }
 
     const logQuery = `
       INSERT INTO audit_logs (table_name, record_id, action, actor_identity, old_data, new_data)
       VALUES  ($1, $2, $3, $4, $5, $6);
     `;
-    const logResult = await client.query(logQuery, [
+    await client.query(logQuery, [
       'scan_package',
       req.params.id,
       'UPDATE',
@@ -265,67 +233,81 @@ export async function modifyScanPackage(req, res, next) {
 }
 
 export async function resolveScanPackage(req, res, next) {
-  const query = `
-    SELECT m.id AS mapping_id,
-        m.action,
-        m.priority,
-        m.frequency,
-        m.notes,
-        l.id AS location_id,
-        l.name AS location_name,
-        l.location AS location_type,
-        l.url,
-        l.selector
-    FROM mapping m JOIN location l ON m.location_id = l.id WHERE m.scan_package_id=$1 AND l.status::text='active' AND m.status::text='active' ORDER BY priority DESC;
-  `;
+  try {
+    const query = `
+      SELECT 
+          m.id AS mapping_id,
+          m.priority,
+          m.locale,
+          m.sp_location_id,
+          m.sp_location_name,
+          m.sp_additional_fields,
+          l.id AS location_id,
+          l.name AS location_name,
+          l.type AS location_type,
+          l.iata,
+          l.city,
+          l.country,
+          l.latitude,
+          l.longitude
+      FROM scan_package_mapping m 
+      JOIN location l ON m.location_id = l.id 
+      WHERE m.scan_package_id=$1 
+        AND l.status::text='active' 
+        AND m.status::text='active'
+      ORDER BY m.priority DESC;
+    `;
 
-  const resolveResponse = await con.query(query, [req.params.id]);
+    const resolveResponse = await con.query(query, [req.params.id]);
 
-  res.status(200).json({
-    status: 'ok',
-    data: resolveResponse.rows,
-  });
+    res.status(200).json({
+      status: 'ok',
+      data: resolveResponse.rows,
+    });
+  } catch (err) {
+    next(err);
+  }
 }
 
 export async function getRelatedMappings(req, res, next) {
-  const checkQuery = `
-    SELECT * FROM scan_package WHERE id=$1;
-  `;
+  try {
+    const checkQuery = `
+      SELECT * FROM scan_package WHERE id=$1;
+    `;
+    const checkResponse = await con.query(checkQuery, [req.params.id]);
 
-  const checkResponse = await con.query(checkQuery, [req.params.id]);
+    if (checkResponse.rowCount == 0) {
+      return next(new AppError('Scan Package not found', 404));
+    }
 
-  if (checkResponse.rowCount == 0) {
-    return next(new AppError('Scan Package not found', 404));
+    const query = `
+      SELECT * FROM scan_package_mapping WHERE scan_package_id=$1;
+    `;
+    const getResponse = await con.query(query, [req.params.id]);
+
+    res.status(200).json({
+      status: 'ok',
+      data: getResponse.rows,
+    });
+  } catch (err) {
+    next(err);
   }
-
-  const query = `
-    SELECT * FROM mapping WHERE scan_package_id=$1;
-  `;
-
-  const getResponse = await con.query(query, [req.params.id]);
-
-  res.status(200).json({
-    status: 'ok',
-    data: getResponse.rows,
-  });
 }
 
 export async function changeStatus(req, res, next) {
   const { status } = req.body;
-
-  // console.log(updates);
 
   if (!status) {
     return next(new AppError('No modification values were provided', 400));
   }
 
   const client = await con.connect();
+
   try {
     await client.query('BEGIN');
     const getQuery = `
-    SELECT * FROM scan_package WHERE id=$1;
-  `;
-
+      SELECT * FROM scan_package WHERE id=$1;
+    `;
     const getResponse = await client.query(getQuery, [req.params.id]);
 
     if (getResponse.rowCount == 0) {
@@ -341,8 +323,7 @@ export async function changeStatus(req, res, next) {
       SET status=$1
       WHERE id=$2
       RETURNING *;
-  `;
-
+    `;
     const updateSpResponse = await client.query(updateSpQuery, [
       status,
       req.params.id,
@@ -352,12 +333,11 @@ export async function changeStatus(req, res, next) {
 
     if (status === 'inactive') {
       const updateMapQuery = `
-      UPDATE mapping
-      SET status='inactive'
-      WHERE scan_package_id=$1 AND status='active'
-      RETURNING *;
-    `;
-
+        UPDATE scan_package_mapping
+        SET status='inactive'
+        WHERE scan_package_id=$1 AND status='active'
+        RETURNING *;
+      `;
       updateMapResponse = await client.query(updateMapQuery, [req.params.id]);
     }
 
@@ -365,8 +345,7 @@ export async function changeStatus(req, res, next) {
       INSERT INTO audit_logs (table_name, record_id, action, actor_identity, old_data, new_data)
       VALUES  ($1, $2, $3, $4, $5, $6);
     `;
-
-    const logResult = await client.query(logQuery, [
+    await client.query(logQuery, [
       'scan_package',
       req.params.id,
       'STATUS',

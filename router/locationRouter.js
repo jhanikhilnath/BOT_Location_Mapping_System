@@ -1,5 +1,4 @@
 import express from 'express';
-
 import {
   changeStatus,
   createLocation,
@@ -8,6 +7,7 @@ import {
   getLocation,
   getRelatedScanPackage,
   modifyLocation,
+  resolveLocationPayload,
   validateBody,
   validateID,
 } from '../controller/locationController.js';
@@ -25,5 +25,7 @@ router
 router.route('/:id/scanPackages').get(validateID, getRelatedScanPackage);
 
 router.route('/:id/status').patch(validateBody, validateID, changeStatus);
+
+router.route('/:id/resolve').get(validateID, resolveLocationPayload);
 
 export default router;

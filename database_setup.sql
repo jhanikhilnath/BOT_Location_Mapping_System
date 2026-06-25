@@ -1,56 +1,54 @@
 CREATE TYPE bot_type AS ENUM ('crawler', 'scraper', 'monitor', 'test agent');
-CREATE TYPE env_type AS ENUM ('development', 'staging','production');
-CREATE TYPE status_type AS ENUM ('active', 'inactive');
-CREATE TYPE location_type AS ENUM ('url', 'selector', 'section');
-CREATE TYPE mapping_action_type AS ENUM ('visit', 'click', 'extract', 'verify');
-CREATE TYPE mapping_status_type AS ENUM ('active', 'inactive', 'draft');
-
-
-CREATE SEQUENCE sp_id_seq START 1;
-CREATE SEQUENCE loc_id_seq START 1;
-CREATE SEQUENCE map_id_seq START 1;
+CREATE TYPE env_type AS ENUM ('development', 'staging', 'production');
+CREATE TYPE status_type AS ENUM ('active', 'inactive', 'draft');
+CREATE TYPE geo_location_type AS ENUM ('airport', 'train station', 'city', 'hotel', 'point of interest'); 
 
 CREATE TABLE scan_package (
-  id VARCHAR(15) PRIMARY KEY DEFAULT 'SP-' || LPAD(nextval('sp_id_seq')::TEXT, 5, '0'),
-  name VARCHAR(300) NOT NULL,
-  type bot_type NOT NULL,
-  target VARCHAR(300) NOT NULL,
-  environment env_type NOT NULL,
-  owner VARCHAR(300) NOT NULL,
-  status status_type DEFAULT 'active'
+    id VARCHAR(100) PRIMARY KEY,
+    name VARCHAR(300) NOT NULL,
+    type bot_type NOT NULL,
+    environment env_type NOT NULL,
+    owner VARCHAR(300) NOT NULL,
+    status status_type DEFAULT 'active'
 );
 
 CREATE TABLE location (
-  id VARCHAR(15) PRIMARY KEY DEFAULT 'LOC-' || LPAD(nextval('loc_id_seq')::TEXT, 5, '0'),
-  name VARCHAR(300) NOT NULL,
-  website VARCHAR(300) NOT NULL,
-  location location_type NOT NULL,
-  url VARCHAR(500) NOT NULL,
-  selector VARCHAR(300) NOT NULL,
-  description VARCHAR(500),
-  status status_type DEFAULT 'active'
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(300) NOT NULL,
+    address TEXT,
+    type geo_location_type NOT NULL,
+    iata VARCHAR(10),
+    fn_geo_id VARCHAR(100),
+    city VARCHAR(300),
+    state VARCHAR(300),
+    country VARCHAR(300) NOT NULL,
+    region VARCHAR(300),
+    latitude NUMERIC(10, 5),
+    longitude NUMERIC(10, 5),
+    status status_type DEFAULT 'active'
 );
 
-CREATE TABLE mapping (
-  id VARCHAR(15) PRIMARY KEY DEFAULT 'MAP-' || LPAD(nextval('map_id_seq')::TEXT, 5, '0'),
-  scan_package_id VARCHAR(15) NOT NULL REFERENCES scan_package(id),
-  location_id VARCHAR(15) NOT NULL REFERENCES location(id),
-  priority INTEGER NOT NULL,
-  action mapping_action_type NOT NULL,
-  frequency VARCHAR(100) NOT NULL,
-  status mapping_status_type NOT NULL,
-  notes VARCHAR(500),
-
-  UNIQUE (scan_package_id, location_id)
+CREATE TABLE scan_package_mapping (
+    id SERIAL PRIMARY KEY,
+    scan_package_id VARCHAR(100) NOT NULL REFERENCES scan_package(id) ON DELETE CASCADE,
+    location_id INTEGER NOT NULL REFERENCES location(id) ON DELETE RESTRICT,
+    locale VARCHAR(10) NOT NULL,                  
+    sp_location_id VARCHAR(100) NOT NULL,
+    sp_location_name VARCHAR(300) NOT NULL,
+    sp_location_city_code VARCHAR(300),
+    sp_location_country_code VARCHAR(10),
+    sp_additional_fields JSONB DEFAULT '{}'::jsonb, 
+    status status_type DEFAULT 'active',
+    UNIQUE (scan_package_id, location_id, locale)
 );
 
 CREATE TABLE audit_logs (
-  id SERIAL PRIMARY KEY,
-  table_name VARCHAR(50) NOT NULL,
-  record_id VARCHAR(15) NOT NULL,
-  action VARCHAR(15) NOT NULL,
-  actor_identity VARCHAR(300) NOT NULL,
-  old_data JSONB,
-  new_data JSONB,
-  created_at TIMESTAMP DEFAULT NOW()
+    id SERIAL PRIMARY KEY,
+    table_name VARCHAR(50) NOT NULL,
+    record_id VARCHAR(100) NOT NULL,
+    action VARCHAR(50) NOT NULL,
+    actor_identity VARCHAR(300) NOT NULL,
+    old_data JSONB,
+    new_data JSONB,
+    created_at TIMESTAMP DEFAULT NOW()
 );

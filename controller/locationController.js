@@ -1,14 +1,12 @@
 import con from '../db.js';
 import AppError from '../utils/appError.js';
 
-// HELPER
-
 export async function validateID(req, res, next) {
-  const id = req.params.id.trim();
+  const id = parseInt(req.params.id, 10);
 
-  if (!id || !id.startsWith('LOC-') || id.length < 9) {
+  if (isNaN(id) || id <= 0) {
     return next(
-      new AppError('ID parameter is in incorrect format or invalid', 400),
+      new AppError('ID parameter must be a valid positive integer', 400),
     );
   }
 
@@ -20,54 +18,55 @@ export async function validateBody(req, res, next) {
   req.body = req.body || {};
 
   for (const arg in req.body) {
-    if (typeof req.body[arg] === 'string' && arg != 'selector') {
+    if (typeof req.body[arg] === 'string') {
       req.body[arg] = req.body[arg].trim().toLowerCase();
-    }
-    if (arg === 'selector') {
-      req.body[arg] = req.body[arg].trim();
     }
   }
 
   next();
 }
 
-// Routes
-
 export async function createLocation(req, res, next) {
-  //
   const {
     name,
-    website,
-    location,
-    url,
-    selector,
-    description,
+    address,
+    type,
+    iata,
+    fn_geo_id,
+    city,
+    state,
+    country,
+    region,
+    latitude,
+    longitude,
     status = 'active',
   } = req.body;
 
-  if (!name || !website || !location || !url || !selector) {
-    return next(new AppError('Missing Fields', 400));
+  if (!name || !type || !country) {
+    return next(new AppError('Missing required geographic fields', 400));
   }
-
-  // Create Locaiton Entry
 
   const client = await con.connect();
 
   try {
-    //
     await client.query('BEGIN');
     const locationQuery = `
-      INSERT INTO location (name,website, location, url, selector, description, status)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO location (name, address, type, iata, fn_geo_id, city, state, country, region, latitude, longitude, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING *;
     `;
     const locationResult = await client.query(locationQuery, [
       name,
-      website,
-      location,
-      url,
-      selector,
-      description,
+      address,
+      type,
+      iata,
+      fn_geo_id,
+      city,
+      state,
+      country,
+      region,
+      latitude,
+      longitude,
       status,
     ]);
     const newData = locationResult.rows[0];
@@ -76,7 +75,7 @@ export async function createLocation(req, res, next) {
       INSERT INTO audit_logs (table_name, record_id, action, actor_identity, new_data)
       VALUES  ($1, $2, $3, $4, $5);
     `;
-    const logResult = await client.query(logQuery, [
+    await client.query(logQuery, [
       'location',
       newData.id,
       'CREATE',
@@ -88,11 +87,9 @@ export async function createLocation(req, res, next) {
 
     res.status(201).json({
       status: 'ok',
-      message: 'Location created successfully.',
       data: newData,
     });
   } catch (err) {
-    //
     await client.query('ROLLBACK');
     next(err);
   } finally {
@@ -103,8 +100,8 @@ export async function createLocation(req, res, next) {
 export async function getAllLocation(req, res, next) {
   try {
     const query = `
-    SELECT * FROM location;
-  `;
+      SELECT * FROM location ORDER BY id ASC;
+    `;
 
     const locationResult = await con.query(query);
 
@@ -118,7 +115,6 @@ export async function getAllLocation(req, res, next) {
 }
 
 export async function getLocation(req, res, next) {
-  //
   const id = req.params.id;
 
   try {
@@ -130,6 +126,7 @@ export async function getLocation(req, res, next) {
     if (locationResult.rowCount === 0) {
       throw new AppError('ID Not found', 404);
     }
+
     res.status(200).json({
       status: 'ok',
       data: locationResult.rows[0],
@@ -141,7 +138,6 @@ export async function getLocation(req, res, next) {
 
 export async function deleteLocation(req, res, next) {
   const id = req.params.id;
-
   const client = await con.connect();
 
   try {
@@ -160,13 +156,7 @@ export async function deleteLocation(req, res, next) {
       INSERT INTO audit_logs (table_name, record_id, action, actor_identity, old_data)
       VALUES  ($1, $2, $3, $4, $5);
     `;
-    const logResult = await client.query(logQuery, [
-      'location',
-      id,
-      'DELETE',
-      'admin',
-      data,
-    ]);
+    await client.query(logQuery, ['location', id, 'DELETE', 'admin', data]);
 
     await client.query('COMMIT');
 
@@ -184,32 +174,35 @@ export async function deleteLocation(req, res, next) {
 
 export async function modifyLocation(req, res, next) {
   const updates = req.body;
-
   const allowedFields = [
     'name',
-    'website',
-    'location',
-    'url',
-    'selector',
-    'description',
+    'address',
+    'type',
+    'iata',
+    'fn_geo_id',
+    'city',
+    'state',
+    'country',
+    'region',
+    'latitude',
+    'longitude',
   ];
 
   const fieldsToUpdate = Object.keys(updates).filter(
     key => allowedFields.includes(key) && updates[key] !== undefined,
   );
 
-  // console.log(updates);
-
   if (fieldsToUpdate.length === 0) {
     return next(new AppError('No modification values were provided', 400));
   }
 
   const client = await con.connect();
+
   try {
     await client.query('BEGIN');
     const getQuery = `
-    SELECT * FROM location WHERE id=$1;
-  `;
+      SELECT * FROM location WHERE id=$1;
+    `;
 
     const getResponse = await client.query(getQuery, [req.params.id]);
 
@@ -218,7 +211,6 @@ export async function modifyLocation(req, res, next) {
     }
 
     let noDiff = true;
-
     fieldsToUpdate.forEach(el => {
       if (updates[el] != getResponse.rows[0][el]) {
         noDiff = false;
@@ -238,22 +230,18 @@ export async function modifyLocation(req, res, next) {
       SET ${modifications.join(', ')}
       WHERE id=$${fieldsToUpdate.length + 1}
       RETURNING *;
-  `;
-    const updateParams = fieldsToUpdate.map((field, index) => updates[field]);
+    `;
 
+    const updateParams = fieldsToUpdate.map(field => updates[field]);
     updateParams.push(req.params.id);
 
     const updateResponse = await client.query(updateQuery, updateParams);
-
-    // if (getResponse.rows[0] == updateResponse.rows[0]) {
-    //   throw new AppError('Data is same', 400);
-    // }
 
     const logQuery = `
       INSERT INTO audit_logs (table_name, record_id, action, actor_identity, old_data, new_data)
       VALUES  ($1, $2, $3, $4, $5, $6);
     `;
-    const logResult = await client.query(logQuery, [
+    await client.query(logQuery, [
       'location',
       req.params.id,
       'UPDATE',
@@ -277,44 +265,46 @@ export async function modifyLocation(req, res, next) {
 }
 
 export async function getRelatedScanPackage(req, res, next) {
-  const checkQuery = `
-    SELECT * FROM location WHERE id=$1;
-  `;
+  try {
+    const checkQuery = `
+      SELECT * FROM location WHERE id=$1;
+    `;
+    const checkResponse = await con.query(checkQuery, [req.params.id]);
 
-  const checkResponse = await con.query(checkQuery, [req.params.id]);
+    if (checkResponse.rowCount == 0) {
+      return next(new AppError('Location not found', 404));
+    }
 
-  if (checkResponse.rowCount == 0) {
-    return next(new AppError('Scan Package not found', 404));
+    const query = `
+      SELECT s.* FROM scan_package_mapping m 
+      JOIN scan_package s ON s.id = m.scan_package_id 
+      WHERE m.location_id=$1;
+    `;
+    const getResponse = await con.query(query, [req.params.id]);
+
+    res.status(200).json({
+      status: 'ok',
+      data: getResponse.rows,
+    });
+  } catch (err) {
+    next(err);
   }
-
-  const query = `
-    SELECT s.* FROM mapping m JOIN scan_package s ON s.id=m.scan_package_id WHERE m.location_id=$1;
-  `;
-
-  const getResponse = await con.query(query, [req.params.id]);
-
-  res.status(200).json({
-    status: 'ok',
-    data: getResponse.rows,
-  });
 }
 
 export async function changeStatus(req, res, next) {
   const { status } = req.body;
-
-  // console.log(updates);
 
   if (!status) {
     return next(new AppError('No modification values were provided', 400));
   }
 
   const client = await con.connect();
+
   try {
     await client.query('BEGIN');
     const getQuery = `
-    SELECT * FROM location WHERE id=$1;
-  `;
-
+      SELECT * FROM location WHERE id=$1;
+    `;
     const getResponse = await client.query(getQuery, [req.params.id]);
 
     if (getResponse.rowCount == 0) {
@@ -330,8 +320,7 @@ export async function changeStatus(req, res, next) {
       SET status=$1
       WHERE id=$2
       RETURNING *;
-  `;
-
+    `;
     const updateLocResponse = await client.query(updateLocQuery, [
       status,
       req.params.id,
@@ -341,12 +330,11 @@ export async function changeStatus(req, res, next) {
 
     if (status === 'inactive') {
       const updateMapQuery = `
-      UPDATE mapping
-      SET status='inactive'
-      WHERE location_id=$1 AND status='active'
-      RETURNING *;
-    `;
-
+        UPDATE scan_package_mapping
+        SET status='inactive'
+        WHERE location_id=$1 AND status='active'
+        RETURNING *;
+      `;
       updateMapResponse = await client.query(updateMapQuery, [req.params.id]);
     }
 
@@ -354,8 +342,7 @@ export async function changeStatus(req, res, next) {
       INSERT INTO audit_logs (table_name, record_id, action, actor_identity, old_data, new_data)
       VALUES  ($1, $2, $3, $4, $5, $6);
     `;
-
-    const logResult = await client.query(logQuery, [
+    await client.query(logQuery, [
       'location',
       req.params.id,
       'STATUS',
@@ -375,6 +362,68 @@ export async function changeStatus(req, res, next) {
     });
   } catch (err) {
     await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
+}
+
+export async function resolveLocationPayload(req, res, next) {
+  const locationId = req.params.id;
+
+  const client = await con.connect();
+
+  try {
+    const locQuery = `SELECT * FROM location WHERE id=$1 AND status='active';`;
+    const locResult = await client.query(locQuery, [locationId]);
+
+    if (locResult.rowCount === 0) {
+      throw new AppError('Active Location not found', 404);
+    }
+
+    const locationData = locResult.rows[0];
+
+    const mapQuery = `SELECT * FROM scan_package_mapping WHERE location_id=$1 AND status='active';`;
+    const mapResult = await client.query(mapQuery, [locationId]);
+
+    const scan_package_mappings = {};
+
+    mapResult.rows.forEach(row => {
+      const brand = row.scan_package_id;
+      const locale = row.locale;
+
+      if (!scan_package_mappings[brand]) {
+        scan_package_mappings[brand] = {};
+      }
+
+      scan_package_mappings[brand][locale] = {
+        sp_location_id: row.sp_location_id,
+        sp_location_name: row.sp_location_name,
+        sp_location_city_code: row.sp_location_city_code,
+        sp_location_country_code: row.sp_location_country_code,
+        sp_location_additional_fields: row.sp_additional_fields || {},
+      };
+    });
+
+    res.status(200).json({
+      location_id: locationData.id,
+      location_name: locationData.name,
+      location_address: locationData.address,
+      location_type: locationData.type,
+      iata: locationData.iata,
+      fn_geo_id: locationData.fn_geo_id,
+      city: locationData.city,
+      state: locationData.state,
+      country: locationData.country,
+      region: locationData.region,
+      location_name_variations: [],
+      geolocation: [
+        Number(locationData.longitude),
+        Number(locationData.latitude),
+      ],
+      scan_package_mappings: scan_package_mappings,
+    });
+  } catch (err) {
     next(err);
   } finally {
     client.release();
