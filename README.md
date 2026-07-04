@@ -1,6 +1,6 @@
 # BOT Location Mapping System
 
-This system is designed for web-scrapping bots to dynamically fetch web-scrapping tasks
+This project is a Geographic Entity Resolution REST API that acts as a central translation hub for automated web-scraping bots. It dynamically maps real-world geographic locations to the precise, localized search parameters required by various target provider websites based on the bot's regional locale. The tech stack consists of a Node.js and Express.js backend connected to a PostgreSQL database.
 
 ## Exposed Endpoints
 
