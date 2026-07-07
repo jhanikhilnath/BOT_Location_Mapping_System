@@ -1,4 +1,5 @@
 import con from '../db.js';
+import { logRepository } from '../repository/logRepository.js';
 import AppError from '../utils/appError.js';
 
 export async function validateID(req, res, next) {
@@ -50,17 +51,15 @@ export async function createScanPackage(req, res, next) {
     ]);
     const newData = packageResult.rows[0];
 
-    const logQuery = `
-      INSERT INTO audit_logs (table_name, record_id, action, actor_identity, new_data)
-      VALUES  ($1, $2, $3, $4, $5);
-    `;
-    await client.query(logQuery, [
+    await logRepository.insertLog(
+      client,
       'scan_package',
       newData.id,
       'CREATE',
       'admin',
+      null,
       newData,
-    ]);
+    );
 
     await client.query('COMMIT');
 
@@ -132,11 +131,15 @@ export async function deleteScanPackage(req, res, next) {
     }
     const data = packageResult.rows[0];
 
-    const logQuery = `
-      INSERT INTO audit_logs (table_name, record_id, action, actor_identity, old_data)
-      VALUES  ($1, $2, $3, $4, $5);
-    `;
-    await client.query(logQuery, ['scan_package', id, 'DELETE', 'admin', data]);
+    await logRepository.insertLog(
+      client,
+      'scan_package',
+      id,
+      'DELETE',
+      'admin',
+      data,
+      null,
+    );
 
     await client.query('COMMIT');
 
@@ -205,18 +208,15 @@ export async function modifyScanPackage(req, res, next) {
 
     const updateResponse = await client.query(updateQuery, updateParams);
 
-    const logQuery = `
-      INSERT INTO audit_logs (table_name, record_id, action, actor_identity, old_data, new_data)
-      VALUES  ($1, $2, $3, $4, $5, $6);
-    `;
-    await client.query(logQuery, [
+    await logRepository.insertLog(
+      client,
       'scan_package',
       req.params.id,
       'UPDATE',
       'admin',
       getResponse.rows[0],
       updateResponse.rows[0],
-    ]);
+    );
 
     await client.query('COMMIT');
 
@@ -340,19 +340,15 @@ export async function changeStatus(req, res, next) {
       `;
       updateMapResponse = await client.query(updateMapQuery, [req.params.id]);
     }
-
-    const logQuery = `
-      INSERT INTO audit_logs (table_name, record_id, action, actor_identity, old_data, new_data)
-      VALUES  ($1, $2, $3, $4, $5, $6);
-    `;
-    await client.query(logQuery, [
+    await logRepository.insertLog(
+      client,
       'scan_package',
       req.params.id,
       'STATUS',
       'admin',
       getResponse.rows[0],
       updateSpResponse.rows[0],
-    ]);
+    );
 
     await client.query('COMMIT');
 
