@@ -48,12 +48,12 @@ export class MappingRepository {
     return getResponse.rows;
   }
 
-  static async getOneMapping(id) {
+  static async getOneMapping(id, dbClient = con) {
     const query = `
       SELECT * FROM scan_package_mapping WHERE id=$1;
     `;
 
-    const getResponse = await con.query(query, [id]);
+    const getResponse = await dbClient.query(query, [id]);
 
     return getResponse.rows[0];
   }

@@ -1,4 +1,5 @@
 import { MappingRepository } from '../repository/mappingRepository.js';
+import { logRepository } from '../repository/logRepository.js';
 import AppError from '../utils/appError.js';
 import withTransaction from '../utils/dbTransaction.js';
 
@@ -25,7 +26,7 @@ export class MappingService {
       !sp_location_name ||
       !priority
     ) {
-      return next(new AppError('Missing Required Fields.', 400));
+      throw new AppError('Missing Required Fields.', 400);
     }
 
     return await withTransaction(async client => {
@@ -46,7 +47,7 @@ export class MappingService {
       await logRepository.insertLog(
         client,
         'scan_package_mapping',
-        newData.id,
+        newMapping.id,
         'CREATE',
         'admin',
         null,
@@ -104,7 +105,7 @@ export class MappingService {
     }
 
     return await withTransaction(async client => {
-      const currentData = await MappingRepository.getOneMapping(client, id);
+      const currentData = await MappingRepository.getOneMapping(id, client);
 
       if (!currentData) {
         throw new AppError('ID Not Found', 404);
@@ -144,11 +145,11 @@ export class MappingService {
 
   static async changeStatus(id, newStatus) {
     if (!newStatus) {
-      return next(new AppError('No modification values were provided', 400));
+      throw new AppError('No modification values were provided', 400);
     }
 
     return await withTransaction(async client => {
-      const getResponse = await MappingRepository.getOneMapping(id);
+      const getResponse = await MappingRepository.getOneMapping(id, client);
 
       if (!getResponse) {
         throw new AppError('ID Not Found', 404);
@@ -167,11 +168,11 @@ export class MappingService {
       await logRepository.insertLog(
         client,
         'scan_package_mapping',
-        req.params.id,
+        id,
         'STATUS',
         'admin',
         getResponse,
-        updateResponse.rows[0],
+        updateResponse,
       );
 
       return updateResponse;

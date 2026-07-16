@@ -1,5 +1,3 @@
-import con from '../db.js';
-import { logRepository } from '../repository/logRepository.js';
 import { MappingRepository } from '../repository/mappingRepository.js';
 import { MappingService } from '../services/mappingService.js';
 import AppError from '../utils/appError.js';
@@ -46,7 +44,7 @@ export const getAllMappings = catchasync(async (req, res, next) => {
 
   res.status(200).json({
     status: 'ok',
-    data: getResponse.rows,
+    data: mappings,
   });
 });
 
@@ -68,7 +66,7 @@ export const deleteMapping = catchasync(async (req, res, next) => {
 
   res.status(200).json({
     status: 'ok',
-    data: data,
+    data: deletedMapping,
   });
 });
 
@@ -86,7 +84,7 @@ export const modifyMapping = catchasync(async (req, res, next) => {
 
 export const changeStatus = catchasync(async (req, res, next) => {
   const updatedResponse = await MappingService.changeStatus(
-    id,
+    req.params.id,
     req.body.status,
   );
 
