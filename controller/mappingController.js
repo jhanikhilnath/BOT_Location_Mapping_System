@@ -2,6 +2,7 @@ import { MappingRepository } from '../repository/mappingRepository.js';
 import { MappingService } from '../services/mappingService.js';
 import AppError from '../utils/appError.js';
 import catchasync from '../utils/catchasync.js';
+import cacheUtil from '../utils/redisClient.js';
 
 export async function validateBody(req, res, next) {
   req.body = req.body || {};
@@ -40,7 +41,11 @@ export const createNewMapping = catchasync(async (req, res, next) => {
 });
 
 export const getAllMappings = catchasync(async (req, res, next) => {
-  const mappings = await MappingRepository.getAllMappings();
+  const cacheKey = 'mapping:all';
+
+  const mappings = await cacheUtil.getOrSet(cacheKey, async () => {
+    return await MappingRepository.getAllMappings();
+  });
 
   res.status(200).json({
     status: 'ok',
@@ -49,7 +54,11 @@ export const getAllMappings = catchasync(async (req, res, next) => {
 });
 
 export const getOneMapping = catchasync(async (req, res, next) => {
-  const getResponse = await MappingRepository.getOneMapping(req.params.id);
+  const cacheKey = `mapping:detail:${req.params.id}`;
+
+  const getResponse = await cacheUtil.getOrSet(cacheKey, async () => {
+    return await MappingRepository.getOneMapping(req.params.id);
+  });
 
   if (!getResponse) {
     return next(new AppError('ID Not found.', 404));

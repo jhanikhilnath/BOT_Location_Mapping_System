@@ -2,6 +2,7 @@ import { LocationRepository } from '../repository/locationRepository.js';
 import { LocationService } from '../services/locationService.js';
 import AppError from '../utils/appError.js';
 import catchasync from '../utils/catchasync.js';
+import cacheUtil from '../utils/redisClient.js';
 
 export async function validateID(req, res, next) {
   const id = parseInt(req.params.id, 10);
@@ -38,7 +39,11 @@ export const createLocation = catchasync(async (req, res, next) => {
 });
 
 export const getAllLocation = catchasync(async (req, res, next) => {
-  const locations = await LocationRepository.getAllLocations();
+  const cacheKey = 'location:all';
+
+  const locations = await cacheUtil.getOrSet(cacheKey, async () => {
+    return await LocationRepository.getAllLocations();
+  });
 
   res.status(200).json({
     status: 'ok',
@@ -47,7 +52,11 @@ export const getAllLocation = catchasync(async (req, res, next) => {
 });
 
 export const getLocation = catchasync(async (req, res, next) => {
-  const locationData = await LocationRepository.getOneLocation(req.params.id);
+  const cacheKey = `location:detail:${req.params.id}`;
+
+  const locationData = await cacheUtil.getOrSet(cacheKey, async () => {
+    return await LocationRepository.getOneLocation(req.params.id);
+  });
 
   if (!locationData) {
     throw new AppError('ID Not found', 404);
@@ -81,16 +90,17 @@ export const modifyLocation = catchasync(async (req, res, next) => {
 });
 
 export const getRelatedScanPackage = catchasync(async (req, res, next) => {
-  const locationData = await LocationRepository.getOneLocation(req.params.id);
-
-  if (!locationData) {
-    throw new AppError('Location not found', 404);
-  }
+  const cacheKey = `location:package:${req.params.id}`;
 
   // 2. Fetch related scan packages
-  const scanPackages = await LocationRepository.getRelatedScanPackages(
-    req.params.id,
-  );
+  const scanPackages = await cacheUtil.getOrSet(cacheKey, async () => {
+    const locationData = await LocationRepository.getOneLocation(req.params.id);
+
+    if (!locationData) {
+      throw new AppError('Location not found', 404);
+    }
+    return await LocationRepository.getRelatedScanPackages(req.params.id);
+  });
 
   res.status(200).json({
     status: 'ok',

@@ -2,6 +2,7 @@ import { ScanPackageRepository } from '../repository/scanPackageRepository.js';
 import { ScanPackageService } from '../services/scanPackageService.js';
 import AppError from '../utils/appError.js';
 import catchasync from '../utils/catchasync.js';
+import cacheUtil from '../utils/redisClient.js';
 
 export async function validateID(req, res, next) {
   const id = req.params.id.trim();
@@ -37,7 +38,11 @@ export const createScanPackage = catchasync(async (req, res, next) => {
 });
 
 export const getAllScanPackage = catchasync(async (req, res, next) => {
-  const packages = await ScanPackageRepository.getAllScanPackages();
+  const cacheKey = 'scan_package:all';
+
+  const packages = await cacheUtil.getOrSet(cacheKey, async () => {
+    return await ScanPackageRepository.getAllScanPackages();
+  });
 
   res.status(200).json({
     status: 'ok',
@@ -46,9 +51,11 @@ export const getAllScanPackage = catchasync(async (req, res, next) => {
 });
 
 export const getScanPackage = catchasync(async (req, res, next) => {
-  const packageData = await ScanPackageRepository.getOneScanPackage(
-    req.params.id,
-  );
+  const cacheKey = `scan_package:detail:${req.params.id}`;
+
+  const packageData = await cacheUtil.getOrSet(cacheKey, async () => {
+    return await ScanPackageRepository.getOneScanPackage(req.params.id);
+  });
 
   if (!packageData) {
     throw new AppError('ID Not found', 404);
@@ -84,9 +91,11 @@ export const modifyScanPackage = catchasync(async (req, res, next) => {
 });
 
 export const resolveScanPackage = catchasync(async (req, res, next) => {
-  const resolvedData = await ScanPackageRepository.resolveScanPackage(
-    req.params.id,
-  );
+  const cacheKey = `scan_package:resolve:${req.params.id}`;
+
+  const resolvedData = await cacheUtil.getOrSet(cacheKey, async () => {
+    return await ScanPackageRepository.resolveScanPackage(req.params.id);
+  });
 
   res.status(200).json({
     status: 'ok',
@@ -95,16 +104,19 @@ export const resolveScanPackage = catchasync(async (req, res, next) => {
 });
 
 export const getRelatedMappings = catchasync(async (req, res, next) => {
-  const packageData = await ScanPackageRepository.getOneScanPackage(
-    req.params.id,
-  );
-  if (!packageData) {
-    throw new AppError('Scan Package not found', 404);
-  }
+  const cacheKey = `scan_package:related-mappings:${req.params.id}`;
 
-  const mappings = await ScanPackageRepository.getRelatedMappings(
-    req.params.id,
-  );
+  const mappings = await cacheUtil.getOrSet(cacheKey, async () => {
+    const packageData = await ScanPackageRepository.getOneScanPackage(
+      req.params.id,
+    );
+
+    if (!packageData) {
+      throw new AppError('Scan Package not found', 404);
+    }
+
+    return await ScanPackageRepository.getRelatedMappings(req.params.id);
+  });
 
   res.status(200).json({
     status: 'ok',
